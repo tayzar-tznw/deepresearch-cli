@@ -11,10 +11,10 @@ CLI + Claude Code skills for **Google Deep Research Max** — the autonomous res
 **Recommended (one command per piece):**
 
 ```bash
-# 1. Install the CLI binary directly from GitHub.
-#    --ignore-scripts skips a known-broken (and harmless) protobufjs postinstall
-#    that races with npm on Node 22+. Details under "Install troubleshooting" below.
-npm i -g github:tayzar-tznw/deepresearch-cli --ignore-scripts
+# 1. Install the CLI binary from the GitHub tarball URL.
+#    (Use the tarball URL — NOT `github:tayzar-tznw/deepresearch-cli` — to bypass
+#     npm's git-dep prep, which has a known protobufjs postinstall race on Node 22+.)
+npm i -g https://github.com/tayzar-tznw/deepresearch-cli/tarball/main
 
 # 2. Install the agent skills via the universal `skills` package manager
 #    (auto-detects Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Copilot,
@@ -25,23 +25,29 @@ npx skills add tayzar-tznw/deepresearch-cli
 gdr doctor
 ```
 
-> Once published to the npm registry, the binary install simplifies to `npm i -g google-deep-research` (the registry serves a pre-built `dist/`, so neither `--ignore-scripts` nor a local build is needed).
+> Once published to the npm registry, the binary install simplifies to `npm i -g google-deep-research`.
 
 The `skills` CLI is from [vercel-labs/skills](https://github.com/vercel-labs/skills) and follows the open Agent Skills spec — same install command works for Claude Code, Gemini CLI, Codex CLI, and 40+ other agents. Add `-g` to install user-globally instead of project-scoped, or `-a claude-code -a gemini-cli` to target specific agents.
 
-**Manual alternative** (works without the `skills` package):
+### Install troubleshooting
 
+**`gdr: command not found` after install.** Make sure `$(npm config get prefix)/bin` is on your `PATH`. With nvm/fnm this happens automatically when nvm is sourced; without nvm, add it to your shell rc.
+
+**`spawn sh ENOENT` on `node_modules/protobufjs`.** You used `npm i -g github:tayzar-tznw/deepresearch-cli` (the `github:` shortcut). That path runs a nested `npm install --force` to "prep" the git dep, which trips a postinstall race in protobufjs on Node 22+. **Use the tarball URL above instead** — it skips the prep step entirely and installs cleanly.
+
+**`ENOTDIR` retire-rename error during reinstall.** A previous failed install left a non-directory entry in your global `node_modules`. Force-clean it before retrying:
+```bash
+PREFIX=$(npm config get prefix)
+rm -rf $PREFIX/lib/node_modules/google-deep-research $PREFIX/lib/node_modules/.google-deep-research-* $PREFIX/bin/gdr
+```
+
+**Manual fallback** (clone + link, no global npm dep install):
 ```bash
 git clone https://github.com/tayzar-tznw/deepresearch-cli.git
 cd deepresearch-cli
-npm install --ignore-scripts && npm run build && npm link
-gdr install-skills        # drops bundled SKILL.md into ~/.claude/skills/
-gdr doctor
+npm install --ignore-scripts && npm link
+gdr --version
 ```
-
-### Install troubleshooting
-
-If `npm i -g github:...` fails with `spawn sh ENOENT` on `node_modules/protobufjs`, that's a transitive dep's postinstall script racing with npm on Node 22+. The postinstall is purely a version-mismatch warning and does no real work — `--ignore-scripts` skips it safely. Other workarounds: `pnpm i -g github:tayzar-tznw/deepresearch-cli` or `bun i -g github:tayzar-tznw/deepresearch-cli`.
 
 Then set up auth — **two paths, Vertex AI is the default**:
 
