@@ -16,9 +16,11 @@ Use this skill when the user asks about a research job that was started earlier 
    gdr list --json --limit 20
    ```
 
-   The output includes `id`, `state`, `agent`, `query`, `label`, `costEstimateUsd`, and ages.
+   The output includes `id`, `state`, `agent`, `query`, `label`, `costEstimateUsd`, `intendedAgent` (set when `--plan` auto-routed the plan turn to Standard), and ages.
 
 2. **Match the user's intent** to a job using the `label` (set via `--name` when started), the `query` text, or the `id` if they pasted one. If multiple jobs match, ask the user which one. If none match, tell the user there are no matching jobs in the local cache (the cache is per-machine — jobs started on another machine won't appear).
+
+   > If the matched job has `agent: "deep-research-preview-04-2026"` AND `intendedAgent: "deep-research-max-preview-04-2026"`, that's a **plan turn** (the user is mid-collaborative-planning workflow). Treat it as a plan, not a final report — fetching gives you a short "Research Plan:" markdown, and the user probably wants to either approve (`gdr refine <id> --approve`) or refine (`gdr refine <id> "<changes>"`) to kick off the actual Max-tier research.
 
 3. **Get the latest server-side state**:
 

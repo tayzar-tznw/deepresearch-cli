@@ -39,11 +39,15 @@ For Max-tier runs, **always use `--plan` by default** so the user gets to review
    gdr start "<full research prompt>" --plan --name "<label>" --confirm-cost --json
    ```
 
-3. **Wait for the plan.** `gdr wait` now exits cleanly when state hits `requires_action` (~30–90 sec for the plan itself):
+   The JSON response will include `plan_auto_standard: true` and `intended_agent: "deep-research-max-preview-04-2026"` — that's expected (the workaround for the Max preview gap). Cost shown will be ~$1.22 (Standard for the plan turn), not $4.80.
+
+3. **Wait for the plan** (~30–90 sec — the Standard plan turn is fast):
 
    ```bash
    gdr wait <id> --json
    ```
+
+   Plan completes with `state: completed`. (You may also see `requires_action` if/when Google ships native Max support — `gdr wait` exits on either.)
 
 4. **Fetch and read the proposed plan**, then PRESENT IT TO THE USER:
 
@@ -51,13 +55,13 @@ For Max-tier runs, **always use `--plan` by default** so the user gets to review
    gdr fetch <id> --out ./plans/<label> --format md --json
    ```
 
-   `Read` the markdown at the printed `report` path. Summarize the plan's structure to the user (what sections, what sources, what scope) and explicitly ask:
+   `Read` the markdown at the printed `report` path — the plan is short (~1 KB, 5–10 numbered steps under "Research Plan:"). Summarize the plan's structure to the user (what areas it'll investigate, what sources, what scope) and explicitly ask:
 
-   > "Here's the proposed research plan: [summary]. Want me to **approve as-is**, or should I **refine it**? (e.g., add a topic, drop a section, narrow the date range, swap sources, change the angle)"
+   > "Here's the proposed research plan: [summary]. Want me to **approve as-is** (run on Max, ~$4.80, 10–60 min), or should I **refine it**? (e.g., add a topic, drop a section, narrow the date range, swap sources, change the angle)"
 
    Wait for their answer before proceeding.
 
-5. **Approve or refine** based on their reply:
+5. **Approve or refine** based on their reply. The refine call automatically uses the user's intended Max tier (carried via `intendedAgent` on the parent job — you don't have to specify):
 
    ```bash
    # User said "looks good", "go ahead", "approve", etc.:
@@ -67,9 +71,9 @@ For Max-tier runs, **always use `--plan` by default** so the user gets to review
    gdr refine <id> "Also include vendor X. Skip the historical timeline. Focus on 2025+." --confirm-cost --json
    ```
 
-   Both return a NEW id (the actual research run, linked via `previous_interaction_id`). Use that new id for the next steps.
+   Both return a NEW id with `agent: "deep-research-max-preview-04-2026"` and `cost_estimate: $4.80`. Use that new id for the next steps.
 
-6. **Wait for the actual research run** (10–60 min). Two options — pick based on whether the user wants visibility:
+6. **Wait for the actual research run** (10–60 min on Max). Two options — pick based on whether the user wants visibility:
 
    ```bash
    # Quietest — just block until done

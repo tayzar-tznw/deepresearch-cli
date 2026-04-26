@@ -12,9 +12,7 @@ Use this skill when the user wants Deep Research Max to ground its analysis in s
 
 1. **Resolve the files.** If the user gave a glob, expand it with `Glob`. If they gave a directory, list the files. If they gave specific paths, just use them.
 
-2. **Confirm cost** on first use this session — Max with file inputs is still ~$4.80, plus token cost for the file contents (Max accepts up to ~1M input tokens including files).
-
-3. **Build the command WITH `--plan` by default.** File-grounded research benefits even more from the plan-review step (it reveals what the agent extracted from the docs and how it'll combine that with web sources). Repeat `--file <path>` for each local file and `--url <url>` for each web URL.
+2. **Build the command WITH `--plan` by default.** File-grounded research benefits even more from the plan-review step (it reveals what the agent extracted from the docs and how it'll combine that with web sources). Repeat `--file <path>` for each local file and `--url <url>` for each web URL.
 
    ```bash
    gdr start "<research prompt that references the attached files>" \
@@ -31,23 +29,25 @@ Use this skill when the user wants Deep Research Max to ground its analysis in s
    - Supported file types: PDF, CSV, TXT, MD, JSON, PNG/JPG/WebP, MP3/WAV, MP4.
    - Skip `--plan` only if the user explicitly said "just run it" / "no plan".
 
-4. **Wait for the plan, present it, get approval/refinement** — same as in the `deep-research` skill (steps 3–5):
+   > **Under the hood (preview workaround):** Deep Research Max ignores `collaborative_planning` in the current preview, so `gdr` auto-routes the plan turn to Standard tier (~$1.22, ~30 sec). The JSON response includes `plan_auto_standard: true` and `intended_agent: "deep-research-max-preview-04-2026"`. The actual research run after `gdr refine` automatically uses Max via the preserved `intendedAgent`. See the `deep-research` skill for the full explanation.
+
+3. **Wait for the plan, present it, get approval/refinement** — same as in the `deep-research` skill (steps 3–5):
 
    ```bash
-   gdr wait <id> --json                                      # exits at requires_action
+   gdr wait <id> --json                                      # ~30 sec, exits when state=completed
    gdr fetch <id> --out ./plans/<label>                      # read & present plan to user
    gdr refine <id> --approve   # OR: gdr refine <id> "<refinement>"
-   #   → returns NEW id
+   #   → returns NEW id, agent=deep-research-max-preview-04-2026, ~$4.80
    ```
 
-5. **Wait + fetch the refined run** as in `deep-research`:
+4. **Wait + fetch the refined run** as in `deep-research` (10–60 min on Max):
 
    ```bash
    gdr wait <new-id> --json
    gdr fetch <new-id> --out ./research/<label> --format md --json
    ```
 
-6. **Read** the markdown at the printed `report` path and summarize.
+5. **Read** the markdown at the printed `report` path and summarize.
 
 ## Tips
 
