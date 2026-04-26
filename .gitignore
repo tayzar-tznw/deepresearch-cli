@@ -1,5 +1,4 @@
 node_modules/
-dist/
 *.log
 .env
 .env.local
@@ -8,3 +7,7 @@ coverage/
 *.tsbuildinfo
 research/
 .claude/
+
+# `dist/` IS committed so `npm i -g github:...` works without a build step.
+# Source-maps stay local to keep the repo lean.
+dist/*.map
