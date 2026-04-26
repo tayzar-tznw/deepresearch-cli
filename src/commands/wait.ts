@@ -27,7 +27,11 @@ export async function waitCmd(id: string, opts: WaitOpts): Promise<void> {
       },
     });
     spinner?.succeed(`job ${id} ${job.status}`);
-    log.emit({ id: job.id, state: job.status, next: `gdr fetch ${job.id} --out ./research` });
+    const next =
+      job.status === "requires_action"
+        ? `gdr fetch ${job.id} --out ./plans  # review the proposed plan, then: gdr refine ${job.id} "<feedback>"  (or --approve)`
+        : `gdr fetch ${job.id} --out ./research`;
+    log.emit({ id: job.id, state: job.status, next });
   } catch (err) {
     spinner?.fail();
     throw err;

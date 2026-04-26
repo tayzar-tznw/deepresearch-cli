@@ -96,6 +96,27 @@ describe("dry-run integration", () => {
     expect(parsed.jobs[0].label).toBe("jobA");
   });
 
+  it("`gdr refine` requires either a message or --approve", async () => {
+    const { stderr, code } = await runCli(["refine", "fake-parent-id", "--json"], env);
+    expect(code).toBe(4);
+    expect(stderr).toMatch(/refinement message|--approve/i);
+  });
+
+  it("`gdr refine --approve` creates a continuation in dry-run mode", async () => {
+    const start = await runCli(["start", "first job", "--name", "p1", "--confirm-cost", "--json"], env);
+    const startLine = start.stdout.trim().split("\n").filter(Boolean).pop()!;
+    const parentId = (JSON.parse(startLine) as { id: string }).id;
+    const { stdout, code } = await runCli(
+      ["refine", parentId, "--approve", "--confirm-cost", "--json"],
+      env,
+    );
+    expect(code).toBe(0);
+    const refLine = stdout.trim().split("\n").filter(Boolean).pop()!;
+    const parsed = JSON.parse(refLine) as { id: string; parent: string };
+    expect(parsed.id).toMatch(/^dry-/);
+    expect(parsed.parent).toBe(parentId);
+  });
+
   it("`gdr install-skills --dry-run` lists the three bundled skills", async () => {
     const targetDir = path.join(tmp, "skills-target");
     const { stdout, code } = await runCli(

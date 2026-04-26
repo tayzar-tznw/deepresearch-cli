@@ -31,6 +31,7 @@ export async function pollUntilDone(
     });
     opts.onUpdate?.(job);
     if (job.status === "completed") return job;
+    if (job.status === "requires_action") return job;
     if (job.status === "failed") {
       throw new JobFailedError(id, job.status, job.error?.message);
     }

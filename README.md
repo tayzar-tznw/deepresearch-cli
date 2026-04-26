@@ -124,6 +124,7 @@ Max-tier runs are blocked unless you opt in with **one** of:
 | `gdr follow <id>` | **Stream Gemini's `thought_summary` deltas + report text live (SSE).** `--no-thoughts` hides reasoning; `--tool-calls` surfaces search queries / URL fetches. |
 | `gdr fetch <id>` | Download report + charts + images. |
 | `gdr cancel <id>` | Server-side cancel. |
+| `gdr refine <parent-id> [msg]` | Send a plan refinement, approval (`--approve`), or follow-up question to a prior job. Creates a continuation linked via `previous_interaction_id`. |
 | `gdr auth` | Store / show / clear API key. |
 | `gdr config <get\|set\|list> ...` | Read or write config keys. |
 | `gdr doctor` | Diagnose auth, network, skill install. |

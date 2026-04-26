@@ -59,10 +59,41 @@ Use this skill to delegate long-form, multi-source research to Google's Deep Res
 
 6. **Read the markdown** from the printed `report` path, summarize the key findings in your reply, and cite the file path so the user can open it.
 
+## Collaborative planning workflow (`--plan` + `gdr refine`)
+
+When the user's prompt is ambiguous, broad, or it's worth confirming the angle before burning ~$4.80, kick off with `--plan`. The agent will produce a proposed research plan and pause in `requires_action` instead of executing. Then:
+
+```bash
+# 1. Start with collaborative planning
+gdr start "<query>" --plan --name <label> --confirm-cost --json
+# → state: in_progress
+
+# 2. Wait — exits cleanly when state becomes `requires_action`
+gdr wait <id>
+
+# 3. Read the proposed plan
+gdr fetch <id> --out ./plans/<label>
+# → ./plans/<label>/report.md  (the proposed plan)
+
+# 4a. Approve as-is → executes the original plan
+gdr refine <id> --approve --confirm-cost --json
+# → returns a NEW interaction id; poll that one
+
+# 4b. Refine → executes the modified plan
+gdr refine <id> "Also include vendor X. Skip the historical timeline." --confirm-cost --json
+# → returns a NEW interaction id; poll that one
+
+# 5. Wait + fetch the refined run as usual
+gdr wait <new-id>
+gdr fetch <new-id> --out ./research/<label>
+```
+
+`gdr refine` also works on any **completed** job — useful for follow-up questions on a finished report ("expand section 3", "find sources from after X date"). The continuation is linked via `previous_interaction_id` so the agent has the full prior context.
+
 ## Flags worth knowing
 
 - `--standard` — cheaper, faster, less depth (~$1.22, 5-10 min)
-- `--plan` — collaborative planning: agent returns a research plan first; you can refine it before execution. Use when the user's prompt is ambiguous.
+- `--plan` — collaborative planning (see above)
 - `--no-web` — disable web search (only useful with `--file` / `--url` for grounded-only research)
 - `--file <path>` — repeatable, attach local PDFs/CSVs/images for grounding (use `research-with-files` skill instead if files are central)
 - `--url <url>` — repeatable, ground in specific URLs

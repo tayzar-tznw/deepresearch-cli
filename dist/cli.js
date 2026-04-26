@@ -362,6 +362,7 @@ ${req.urls.map((u) => `- ${u}`).join("\n")}`
     input: input2,
     background: true,
     store: true,
+    ...req.previousInteractionId ? { previous_interaction_id: req.previousInteractionId } : {},
     agent_config: {
       type: "deep-research",
       collaborative_planning: req.collaborativePlanning ?? false,
@@ -716,6 +717,7 @@ async function pollUntilDone(client, id, opts) {
     });
     opts.onUpdate?.(job);
     if (job.status === "completed") return job;
+    if (job.status === "requires_action") return job;
     if (job.status === "failed") {
       throw new JobFailedError(id, job.status, job.error?.message);
     }
@@ -746,7 +748,8 @@ async function waitCmd(id, opts) {
       }
     });
     spinner?.succeed(`job ${id} ${job.status}`);
-    log.emit({ id: job.id, state: job.status, next: `gdr fetch ${job.id} --out ./research` });
+    const next = job.status === "requires_action" ? `gdr fetch ${job.id} --out ./plans  # review the proposed plan, then: gdr refine ${job.id} "<feedback>"  (or --approve)` : `gdr fetch ${job.id} --out ./research`;
+    log.emit({ id: job.id, state: job.status, next });
   } catch (err) {
     spinner?.fail();
     throw err;
@@ -1161,6 +1164,61 @@ async function cancelCmd(id, opts) {
   log.emit({ id: res.id, state: res.status });
 }
 
+// src/commands/refine.ts
+async function refineCmd(parentId, message, opts) {
+  const log = new Logger(opts);
+  if (!opts.approve && (!message || message.trim() === "")) {
+    throw new ValidationError(
+      "provide a refinement message, or pass --approve to continue the plan as-is"
+    );
+  }
+  const cfg = await readConfig();
+  const auth2 = await resolveAuth(cfg);
+  const parent = await getJob(parentId);
+  const agent = parent?.agent ?? AGENT_MAX;
+  assertCostBudget({
+    agent,
+    confirmCost: opts.confirmCost,
+    costCeilingUsd: cfg.costCeilingUsd
+  });
+  warnIfVertexDeepResearch(log, auth2);
+  const client = makeClient(auth2);
+  const input2 = opts.approve ? "Approved. Please proceed with the plan as-is." : (message ?? "").trim();
+  const req = {
+    query: input2,
+    agent,
+    enableWeb: true,
+    previousInteractionId: parentId
+  };
+  const spinner = log.spinner(`creating refinement of ${parentId}`);
+  let res;
+  try {
+    res = await client.create(req);
+  } catch (err) {
+    spinner?.fail();
+    throw err;
+  }
+  spinner?.succeed(`refinement ${res.id} created (parent: ${parentId})`);
+  await putJob({
+    id: res.id,
+    agent,
+    query: `[refines ${parentId}] ${input2.slice(0, 100)}`,
+    label: opts.name ?? (parent?.label ? `${parent.label}-refined` : void 0),
+    createdAt: Date.now(),
+    state: res.status,
+    costEstimateUsd: estimateCost(agent)
+  });
+  log.emit({
+    id: res.id,
+    parent: parentId,
+    state: res.status,
+    agent,
+    cost_estimate_usd: estimateCost(agent),
+    cost_estimate: formatUsd(estimateCost(agent)),
+    next: `gdr wait ${res.id}`
+  });
+}
+
 // src/commands/auth.ts
 import { createInterface } from "readline/promises";
 import { stdin as input, stdout as output } from "process";
@@ -1404,6 +1462,9 @@ program.command("list").description("list cached jobs and 30-day estimated spend
 program.command("follow <id>").description("stream Gemini's thoughts and report deltas in real time (SSE)").option("--no-thoughts", "hide thought_summary deltas; show only output text").option("--tool-calls", "also surface tool invocations (search queries, URL fetches, code exec)").option("--resume-from <event-id>", "resume the stream from a specific event id (after a disconnect)").action((id, opts, cmd) => run(() => followCmd(id, { ...global(cmd), ...opts })));
 program.command("fetch <id>").description("download the report and artifacts for a finished job").option("--out <dir>", "output directory", "./research").addOption(new Option("--format <fmt>", "report format").choices(["md", "json", "html"]).default("md")).option("--include-artifacts", "also save charts and images (default: yes)").action((id, opts, cmd) => run(() => fetchCmd(id, { ...global(cmd), ...opts })));
 program.command("cancel <id>").description("cancel a running job (server-side)").action((id, opts, cmd) => run(() => cancelCmd(id, { ...global(cmd), ...opts })));
+program.command("refine <parent-id> [message]").description("send a plan refinement / approval / follow-up to a prior job (creates a continuation linked via previous_interaction_id)").option("--approve", "approve the parent's proposed plan as-is, no message needed").option("--name <label>", "label for the refinement job").option("--confirm-cost", "acknowledge Max-tier cost (~$4.80) for the continuation").action(
+  (parentId, message, opts, cmd) => run(() => refineCmd(parentId, message, { ...global(cmd), ...opts }))
+);
 var auth = program.command("auth").description("store, show, or clear your Gemini API key in ~/.config/gdr/config.json").option("--key <value>", "set API key non-interactively").option("--show", "show the stored key (masked unless --reveal)").option("--reveal", "with --show, print the unmasked key").option("--clear", "remove the stored key").action((opts, cmd) => run(() => authCmd({ ...global(cmd), ...opts })));
 auth.exitOverride();
 var config = program.command("config").description("read or write configuration values");

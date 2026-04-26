@@ -22,6 +22,7 @@ export interface CreateJobRequest {
   collaborativePlanning?: boolean;
   thinkingSummaries?: boolean;
   visualization?: boolean;
+  previousInteractionId?: string;
 }
 
 export interface StreamEvent {
@@ -240,6 +241,7 @@ async function buildCreateParams(req: CreateJobRequest): Promise<Record<string, 
     input,
     background: true,
     store: true,
+    ...(req.previousInteractionId ? { previous_interaction_id: req.previousInteractionId } : {}),
     agent_config: {
       type: "deep-research",
       collaborative_planning: req.collaborativePlanning ?? false,

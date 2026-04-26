@@ -8,6 +8,7 @@ import { listCmd } from "./commands/list.js";
 import { followCmd } from "./commands/follow.js";
 import { fetchCmd } from "./commands/fetch.js";
 import { cancelCmd } from "./commands/cancel.js";
+import { refineCmd } from "./commands/refine.js";
 import { authCmd } from "./commands/auth.js";
 import { configGetCmd, configListCmd, configSetCmd } from "./commands/config.js";
 import { doctorCmd } from "./commands/doctor.js";
@@ -103,6 +104,16 @@ program
   .command("cancel <id>")
   .description("cancel a running job (server-side)")
   .action((id: string, opts: object, cmd: Command) => run(() => cancelCmd(id, { ...global(cmd), ...opts })));
+
+program
+  .command("refine <parent-id> [message]")
+  .description("send a plan refinement / approval / follow-up to a prior job (creates a continuation linked via previous_interaction_id)")
+  .option("--approve", "approve the parent's proposed plan as-is, no message needed")
+  .option("--name <label>", "label for the refinement job")
+  .option("--confirm-cost", "acknowledge Max-tier cost (~$4.80) for the continuation")
+  .action((parentId: string, message: string | undefined, opts: object, cmd: Command) =>
+    run(() => refineCmd(parentId, message, { ...global(cmd), ...opts })),
+  );
 
 const auth = program
   .command("auth")
