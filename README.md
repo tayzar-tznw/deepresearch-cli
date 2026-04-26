@@ -11,8 +11,10 @@ CLI + Claude Code skills for **Google Deep Research Max** — the autonomous res
 **Recommended (one command per piece):**
 
 ```bash
-# 1. Install the CLI binary
-npm i -g google-deep-research
+# 1. Install the CLI binary directly from GitHub.
+#    --ignore-scripts skips a known-broken (and harmless) protobufjs postinstall
+#    that races with npm on Node 22+. Details under "Install troubleshooting" below.
+npm i -g github:tayzar-tznw/deepresearch-cli --ignore-scripts
 
 # 2. Install the agent skills via the universal `skills` package manager
 #    (auto-detects Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Copilot,
@@ -23,15 +25,23 @@ npx skills add tayzar-tznw/deepresearch-cli
 gdr doctor
 ```
 
+> Once published to the npm registry, the binary install simplifies to `npm i -g google-deep-research` (the registry serves a pre-built `dist/`, so neither `--ignore-scripts` nor a local build is needed).
+
 The `skills` CLI is from [vercel-labs/skills](https://github.com/vercel-labs/skills) and follows the open Agent Skills spec — same install command works for Claude Code, Gemini CLI, Codex CLI, and 40+ other agents. Add `-g` to install user-globally instead of project-scoped, or `-a claude-code -a gemini-cli` to target specific agents.
 
 **Manual alternative** (works without the `skills` package):
 
 ```bash
-npm i -g google-deep-research
+git clone https://github.com/tayzar-tznw/deepresearch-cli.git
+cd deepresearch-cli
+npm install --ignore-scripts && npm run build && npm link
 gdr install-skills        # drops bundled SKILL.md into ~/.claude/skills/
 gdr doctor
 ```
+
+### Install troubleshooting
+
+If `npm i -g github:...` fails with `spawn sh ENOENT` on `node_modules/protobufjs`, that's a transitive dep's postinstall script racing with npm on Node 22+. The postinstall is purely a version-mismatch warning and does no real work — `--ignore-scripts` skips it safely. Other workarounds: `pnpm i -g github:tayzar-tznw/deepresearch-cli` or `bun i -g github:tayzar-tznw/deepresearch-cli`.
 
 Then set up auth — **two paths, Vertex AI is the default**:
 
