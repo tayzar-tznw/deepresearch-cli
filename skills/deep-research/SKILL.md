@@ -23,72 +23,81 @@ Use this skill to delegate long-form, multi-source research to Google's Deep Res
 - Reading a single page (use `WebFetch`)
 - Answering a question whose scope fits in one prompt
 
-## Workflow
+## Workflow — DEFAULT to collaborative planning (`--plan`)
 
-1. **Confirm cost on first use this session.** Max-tier runs cost ~$4.80 each. Tell the user the estimated cost and ask for confirmation. If they want to keep it cheaper, suggest `--standard` (~$1.22, less depth).
+For Max-tier runs, **always use `--plan` by default** so the user gets to review the agent's proposed angle before ~10–60 min of compute kicks off. Skip `--plan` only when one of these is true: (a) the user explicitly says "skip planning" / "just run it" / "no plan", (b) the user supplied a tight, narrowly-scoped brief that leaves no real planning ambiguity, or (c) you're using `--standard` for a quick lookup.
 
-2. **Pick a short label** for the job (1-3 words, snake-case-ish) so the user can refer back to it later via the `research-status` skill.
+### Step-by-step
 
-3. **Fire-and-forget the job.** Do NOT use `gdr run` (which blocks for up to an hour). Instead:
+1. **Pick a short label** for the job (1–3 words, snake-case-ish) so the user can refer back via the `research-status` skill.
+
+2. **Start the planning phase.** Fire-and-forget — do NOT use `gdr run` (which blocks for up to an hour):
 
    ```bash
-   gdr start "<full research prompt>" --name "<label>" --confirm-cost --json
+   gdr start "<full research prompt>" --plan --name "<label>" --confirm-cost --json
    ```
 
-   The output is a JSON line with `id`, `state`, `cost_estimate`, and `next` fields.
-
-4. **Wait in a separate command.** This way a session restart can resume via the `research-status` skill instead of losing the job.
+3. **Wait for the plan.** `gdr wait` now exits cleanly when state hits `requires_action` (~30–90 sec for the plan itself):
 
    ```bash
    gdr wait <id> --json
    ```
 
-   **Or stream the agent's thinking live** if the user wants to watch progress (or asks "show me what it's doing"):
+4. **Fetch and read the proposed plan**, then PRESENT IT TO THE USER:
 
    ```bash
-   gdr follow <id>
+   gdr fetch <id> --out ./plans/<label> --format md --json
    ```
 
-   This emits Gemini's `thought_summary` deltas (dim/italic on stderr) and the report text deltas (normal on stdout) as they arrive via SSE. Add `--tool-calls` to also surface search queries and URL fetches. Use `gdr follow` instead of `gdr wait` when the user wants visibility into the reasoning process.
+   `Read` the markdown at the printed `report` path. Summarize the plan's structure to the user (what sections, what sources, what scope) and explicitly ask:
 
-5. **Fetch the report** when `state` is `completed`:
+   > "Here's the proposed research plan: [summary]. Want me to **approve as-is**, or should I **refine it**? (e.g., add a topic, drop a section, narrow the date range, swap sources, change the angle)"
+
+   Wait for their answer before proceeding.
+
+5. **Approve or refine** based on their reply:
 
    ```bash
-   gdr fetch <id> --out ./research/<label> --format md --json
+   # User said "looks good", "go ahead", "approve", etc.:
+   gdr refine <id> --approve --confirm-cost --json
+
+   # User asked for changes:
+   gdr refine <id> "Also include vendor X. Skip the historical timeline. Focus on 2025+." --confirm-cost --json
    ```
 
-6. **Read the markdown** from the printed `report` path, summarize the key findings in your reply, and cite the file path so the user can open it.
+   Both return a NEW id (the actual research run, linked via `previous_interaction_id`). Use that new id for the next steps.
 
-## Collaborative planning workflow (`--plan` + `gdr refine`)
+6. **Wait for the actual research run** (10–60 min). Two options — pick based on whether the user wants visibility:
 
-When the user's prompt is ambiguous, broad, or it's worth confirming the angle before burning ~$4.80, kick off with `--plan`. The agent will produce a proposed research plan and pause in `requires_action` instead of executing. Then:
+   ```bash
+   # Quietest — just block until done
+   gdr wait <new-id> --json
+
+   # OR stream Gemini's thinking + report text live (when user wants to watch)
+   gdr follow <new-id>             # add --tool-calls to also surface search queries
+   ```
+
+7. **Fetch the final report**:
+
+   ```bash
+   gdr fetch <new-id> --out ./research/<label> --format md --json
+   ```
+
+8. **Read the markdown** from the printed `report` path, summarize the key findings in your reply, and cite the file path so the user can open it.
+
+### Skipping the planning step
+
+If the user has been explicit ("just run it", "no plan needed", or gave you a single tightly-scoped question), drop steps 3–5 and run `gdr start "<prompt>" --name "<label>" --confirm-cost --json` directly, then jump to step 6.
+
+### Follow-up questions on a finished report
+
+`gdr refine` also works on any **completed** job. After step 8, if the user asks a follow-up ("expand section 3", "find newer sources", "compare X to Y from this report"), use:
 
 ```bash
-# 1. Start with collaborative planning
-gdr start "<query>" --plan --name <label> --confirm-cost --json
-# → state: in_progress
-
-# 2. Wait — exits cleanly when state becomes `requires_action`
-gdr wait <id>
-
-# 3. Read the proposed plan
-gdr fetch <id> --out ./plans/<label>
-# → ./plans/<label>/report.md  (the proposed plan)
-
-# 4a. Approve as-is → executes the original plan
-gdr refine <id> --approve --confirm-cost --json
-# → returns a NEW interaction id; poll that one
-
-# 4b. Refine → executes the modified plan
-gdr refine <id> "Also include vendor X. Skip the historical timeline." --confirm-cost --json
-# → returns a NEW interaction id; poll that one
-
-# 5. Wait + fetch the refined run as usual
-gdr wait <new-id>
-gdr fetch <new-id> --out ./research/<label>
+gdr refine <completed-id> "<follow-up question>" --confirm-cost --json
 ```
 
-`gdr refine` also works on any **completed** job — useful for follow-up questions on a finished report ("expand section 3", "find sources from after X date"). The continuation is linked via `previous_interaction_id` so the agent has the full prior context.
+The continuation inherits the full prior context via `previous_interaction_id`, so the agent doesn't re-do work.
 
 ## Flags worth knowing
 

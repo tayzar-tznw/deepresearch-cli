@@ -14,10 +14,11 @@ Use this skill when the user wants Deep Research Max to ground its analysis in s
 
 2. **Confirm cost** on first use this session — Max with file inputs is still ~$4.80, plus token cost for the file contents (Max accepts up to ~1M input tokens including files).
 
-3. **Build the command.** Repeat `--file <path>` for each local file and `--url <url>` for each web URL. Use `--name` to label.
+3. **Build the command WITH `--plan` by default.** File-grounded research benefits even more from the plan-review step (it reveals what the agent extracted from the docs and how it'll combine that with web sources). Repeat `--file <path>` for each local file and `--url <url>` for each web URL.
 
    ```bash
    gdr start "<research prompt that references the attached files>" \
+     --plan \
      --file path/to/paper.pdf \
      --file path/to/data.csv \
      --url https://example.com/related-work \
@@ -28,15 +29,25 @@ Use this skill when the user wants Deep Research Max to ground its analysis in s
 
    - To do **private-only** research (no open-web search), add `--no-web`.
    - Supported file types: PDF, CSV, TXT, MD, JSON, PNG/JPG/WebP, MP3/WAV, MP4.
+   - Skip `--plan` only if the user explicitly said "just run it" / "no plan".
 
-4. **Wait, then fetch** as in the `deep-research` skill:
+4. **Wait for the plan, present it, get approval/refinement** — same as in the `deep-research` skill (steps 3–5):
 
    ```bash
-   gdr wait <id> --json
-   gdr fetch <id> --out ./research/<label> --format md --json
+   gdr wait <id> --json                                      # exits at requires_action
+   gdr fetch <id> --out ./plans/<label>                      # read & present plan to user
+   gdr refine <id> --approve   # OR: gdr refine <id> "<refinement>"
+   #   → returns NEW id
    ```
 
-5. **Read** the markdown at the printed `report` path and summarize.
+5. **Wait + fetch the refined run** as in `deep-research`:
+
+   ```bash
+   gdr wait <new-id> --json
+   gdr fetch <new-id> --out ./research/<label> --format md --json
+   ```
+
+6. **Read** the markdown at the printed `report` path and summarize.
 
 ## Tips
 
