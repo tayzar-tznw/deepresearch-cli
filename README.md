@@ -29,6 +29,14 @@ gdr doctor
 
 The `skills` CLI is from [vercel-labs/skills](https://github.com/vercel-labs/skills) and follows the open Agent Skills spec — same install command works for Claude Code, Gemini CLI, Codex CLI, and 40+ other agents. Add `-g` to install user-globally instead of project-scoped, or `-a claude-code -a gemini-cli` to target specific agents.
 
+### Known preview limitation: `--plan` and Max
+
+Verified 2026-04-26: Deep Research **Max** accepts `collaborative_planning: true` (the API echoes it back) but the agent silently ignores the flag and runs the full report. Only Standard tier honors it.
+
+`gdr` works around this transparently — when you pass `--plan` with default Max, the **plan turn is auto-routed to Standard** (~$0.30, ~30 sec) and the user's intended Max tier is preserved on the job record so `gdr refine <id>` runs the actual research on Max as you wanted. You'll see `plan_auto_standard: true` and `intended_agent: "deep-research-max-preview-04-2026"` in the start command's JSON output.
+
+To force Max for the plan turn (and accept that it'll just produce a full report), pass `--plan-tier=max`. Once Google fixes the preview, this auto-route will become a no-op.
+
 ### Install troubleshooting
 
 **`gdr: command not found` after install.** Make sure `$(npm config get prefix)/bin` is on your `PATH`. With nvm/fnm this happens automatically when nvm is sourced; without nvm, add it to your shell rc.
@@ -124,7 +132,7 @@ Max-tier runs are blocked unless you opt in with **one** of:
 | `gdr follow <id>` | **Stream Gemini's `thought_summary` deltas + report text live (SSE).** `--no-thoughts` hides reasoning; `--tool-calls` surfaces search queries / URL fetches. |
 | `gdr fetch <id>` | Download report + charts + images. |
 | `gdr cancel <id>` | Server-side cancel. |
-| `gdr refine <parent-id> [msg]` | Send a plan refinement, approval (`--approve`), or follow-up question to a prior job. Creates a continuation linked via `previous_interaction_id`. |
+| `gdr refine <parent-id> [msg]` | Send a plan refinement, approval (`--approve`), or follow-up question to a prior job. Creates a continuation linked via `previous_interaction_id`. Routes the new run back to the parent's *intended* tier (Max if you started with `--plan`). |
 | `gdr auth` | Store / show / clear API key. |
 | `gdr config <get\|set\|list> ...` | Read or write config keys. |
 | `gdr doctor` | Diagnose auth, network, skill install. |

@@ -33,7 +33,9 @@ export async function refineCmd(
   const cfg = await readConfig();
   const auth = await resolveAuth(cfg);
   const parent = await getJob(parentId);
-  const agent = parent?.agent ?? AGENT_MAX;
+  // Prefer the user's intended tier (set when --plan auto-switched the parent to
+  // Standard). Falls back to the parent's actual agent, then Max.
+  const agent = parent?.intendedAgent ?? parent?.agent ?? AGENT_MAX;
   assertCostBudget({
     agent,
     confirmCost: opts.confirmCost,

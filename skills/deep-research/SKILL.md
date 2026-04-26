@@ -27,6 +27,8 @@ Use this skill to delegate long-form, multi-source research to Google's Deep Res
 
 For Max-tier runs, **always use `--plan` by default** so the user gets to review the agent's proposed angle before ~10–60 min of compute kicks off. Skip `--plan` only when one of these is true: (a) the user explicitly says "skip planning" / "just run it" / "no plan", (b) the user supplied a tight, narrowly-scoped brief that leaves no real planning ambiguity, or (c) you're using `--standard` for a quick lookup.
 
+> **How `--plan` actually works under the hood (preview limitation):** Deep Research **Max** silently ignores `collaborative_planning: true` in the current Gemini preview (verified 2026-04-26 — it accepts the flag but runs the full report anyway). To work around this, `gdr` **automatically routes the plan turn to Standard tier** (~$0.30, ~30 sec) when you pass `--plan` with default Max. The user's intended Max tier is preserved on the job record so `gdr refine` runs the actual research on Max as expected. You'll see `plan_auto_standard: true` and `intended_agent` in the JSON output. To force Max for the plan turn anyway (it'll skip the plan and just run the full report), pass `--plan-tier=max`.
+
 ### Step-by-step
 
 1. **Pick a short label** for the job (1–3 words, snake-case-ish) so the user can refer back via the `research-status` skill.

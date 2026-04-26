@@ -640,14 +640,26 @@ function stringifyHuman(payload) {
 }
 
 // src/commands/_warn.ts
-var warned = false;
+var warnedVertex = false;
+var warnedPlanAutoStandard = false;
 function warnIfVertexDeepResearch(log, auth2) {
-  if (warned) return;
+  if (warnedVertex) return;
   if (auth2?.mode !== "vertex") return;
-  warned = true;
+  warnedVertex = true;
   log.warn(
     "using Vertex AI (project=" + auth2.project + ", location=" + auth2.location + "). Note: Deep Research Max on Vertex may still be rolling out. If the API rejects the model, set GEMINI_API_KEY to use the Gemini Developer API instead."
   );
+}
+function planAutoStandard(log, requestedAgent, planEnabled) {
+  if (!planEnabled) return { agentForPlanTurn: requestedAgent, switched: false };
+  if (requestedAgent !== AGENT_MAX) return { agentForPlanTurn: requestedAgent, switched: false };
+  if (!warnedPlanAutoStandard) {
+    warnedPlanAutoStandard = true;
+    log.warn(
+      "--plan: routing the plan turn to Standard tier \u2014 Deep Research Max ignores collaborative_planning in the current preview (2026-04-26). The actual research run after `gdr refine` will use Max as you intended. Pass --plan-tier=max to override."
+    );
+  }
+  return { agentForPlanTurn: AGENT_STANDARD, switched: true };
 }
 
 // src/commands/start.ts
@@ -655,7 +667,10 @@ async function startCmd(query, opts) {
   const log = new Logger(opts);
   const cfg = await readConfig();
   const auth2 = await resolveAuth(cfg);
-  const agent = opts.standard ? AGENT_STANDARD : AGENT_MAX;
+  const intendedAgent = opts.standard ? AGENT_STANDARD : AGENT_MAX;
+  const forcedPlanMax = opts.planTier === "max";
+  const { agentForPlanTurn, switched } = forcedPlanMax ? { agentForPlanTurn: intendedAgent, switched: false } : planAutoStandard(log, intendedAgent, Boolean(opts.plan));
+  const agent = agentForPlanTurn;
   assertCostBudget({
     agent,
     confirmCost: opts.confirmCost,
@@ -685,6 +700,7 @@ async function startCmd(query, opts) {
   await putJob({
     id: res.id,
     agent,
+    intendedAgent: switched ? intendedAgent : void 0,
     query,
     label: opts.name,
     createdAt: Date.now(),
@@ -695,6 +711,7 @@ async function startCmd(query, opts) {
     id: res.id,
     state: res.status,
     agent,
+    ...switched ? { intended_agent: intendedAgent, plan_auto_standard: true } : {},
     cost_estimate_usd: estimateCost(agent),
     cost_estimate: formatUsd(estimateCost(agent)),
     next: `gdr wait ${res.id}`
@@ -1175,7 +1192,7 @@ async function refineCmd(parentId, message, opts) {
   const cfg = await readConfig();
   const auth2 = await resolveAuth(cfg);
   const parent = await getJob(parentId);
-  const agent = parent?.agent ?? AGENT_MAX;
+  const agent = parent?.intendedAgent ?? parent?.agent ?? AGENT_MAX;
   assertCostBudget({
     agent,
     confirmCost: opts.confirmCost,
@@ -1454,7 +1471,7 @@ program.name("gdr").description("Google Deep Research Max \u2014 CLI wrapper aro
 function global(cmd) {
   return cmd.optsWithGlobals();
 }
-program.command("start <query>").description("create a Deep Research job and exit immediately (default tier: MAX)").option("--standard", "use the cheaper Standard tier (~$1.22) instead of Max (~$4.80)").option("--no-web", "disable web search; use only attached files/URLs").option("--file <path...>", "attach a local file (PDF/CSV/image/audio/video) \u2014 repeatable", collect, []).option("--url <url...>", "attach a URL for grounding \u2014 repeatable", collect, []).option("--code-exec", "enable code execution tool").option("--plan", "use collaborative planning (review/refine plan before execution)").option("--name <label>", "human-readable label for the job (used by `list` and `research-status` skill)").option("--confirm-cost", "explicitly acknowledge Max-tier cost (~$4.80)").action((query, opts, cmd) => run(() => startCmd(query, { ...global(cmd), ...opts })));
+program.command("start <query>").description("create a Deep Research job and exit immediately (default tier: MAX)").option("--standard", "use the cheaper Standard tier (~$1.22) instead of Max (~$4.80)").option("--no-web", "disable web search; use only attached files/URLs").option("--file <path...>", "attach a local file (PDF/CSV/image/audio/video) \u2014 repeatable", collect, []).option("--url <url...>", "attach a URL for grounding \u2014 repeatable", collect, []).option("--code-exec", "enable code execution tool").option("--plan", "use collaborative planning \u2014 agent returns a plan first; refine via `gdr refine <id> ...`. Auto-routes the plan turn to Standard tier (Max ignores the flag in current preview)").addOption(new Option("--plan-tier <tier>", "force the plan turn's tier (advanced)").choices(["max", "standard"])).option("--name <label>", "human-readable label for the job (used by `list` and `research-status` skill)").option("--confirm-cost", "explicitly acknowledge Max-tier cost (~$4.80)").action((query, opts, cmd) => run(() => startCmd(query, { ...global(cmd), ...opts })));
 program.command("wait <id>").description("poll a running job until it completes (resumable: safe to Ctrl-C and re-run)").option("--timeout <minutes>", "max minutes to poll before giving up", "60").option("--interval <seconds>", "initial poll interval (exp backoff to 60s)", "15").action((id, opts, cmd) => run(() => waitCmd(id, { ...global(cmd), ...opts })));
 program.command("run <query>").description("start + wait + fetch \u2014 convenience for short jobs").option("--standard", "use Standard tier instead of Max").option("--no-web", "disable web search").option("--file <path...>", "attach a local file \u2014 repeatable", collect, []).option("--url <url...>", "attach a URL \u2014 repeatable", collect, []).option("--code-exec", "enable code execution tool").option("--plan", "collaborative planning").option("--name <label>", "label for the job").option("--confirm-cost", "acknowledge Max-tier cost").option("--out <dir>", "output directory for the report and artifacts", "./research").addOption(new Option("--format <fmt>", "report format").choices(["md", "json", "html"]).default("md")).option("--timeout <minutes>", "max minutes to wait", "30").option("--interval <seconds>", "poll interval (only when not streaming)", "15").option("--stream", "stream thought_summary + text deltas live (SSE) instead of polling").option("--no-thoughts", "with --stream, hide thought_summary deltas").option("--tool-calls", "with --stream, also surface tool invocations").action((query, opts, cmd) => run(() => runCmd(query, { ...global(cmd), ...opts })));
 program.command("status <id>").description("one-shot status check for a job").action((id, opts, cmd) => run(() => statusCmd(id, { ...global(cmd), ...opts })));

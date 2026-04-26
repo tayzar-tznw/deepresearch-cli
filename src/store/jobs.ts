@@ -15,6 +15,10 @@ export type JobState =
 export interface JobRecord {
   id: string;
   agent: string;
+  /** When --plan auto-switches the plan turn to Standard, this preserves the user's
+   *  intended tier (typically Max) so `gdr refine` can route the actual research run
+   *  back to it. */
+  intendedAgent?: string;
   query: string;
   label?: string;
   createdAt: number;

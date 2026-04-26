@@ -40,7 +40,8 @@ program
   .option("--file <path...>", "attach a local file (PDF/CSV/image/audio/video) — repeatable", collect, [])
   .option("--url <url...>", "attach a URL for grounding — repeatable", collect, [])
   .option("--code-exec", "enable code execution tool")
-  .option("--plan", "use collaborative planning (review/refine plan before execution)")
+  .option("--plan", "use collaborative planning — agent returns a plan first; refine via `gdr refine <id> ...`. Auto-routes the plan turn to Standard tier (Max ignores the flag in current preview)")
+  .addOption(new Option("--plan-tier <tier>", "force the plan turn's tier (advanced)").choices(["max", "standard"]))
   .option("--name <label>", "human-readable label for the job (used by `list` and `research-status` skill)")
   .option("--confirm-cost", "explicitly acknowledge Max-tier cost (~$4.80)")
   .action((query: string, opts: object, cmd: Command) => run(() => startCmd(query, { ...global(cmd), ...opts })));
